@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>Workout Timer</title>
+<style>
+  :root {
+    --bg: #111418;
+    --panel: #1b2027;
+    --text: #f2f4f7;
+    --muted: #8a94a3;
+    --prepare: #f5b83d;
+    --work: #ef4b4b;
+    --rest: #33c37a;
+    --done: #4b8bef;
+    --accent: var(--prepare);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    transition: background .4s;
+  }
+  body.phase-work    { --accent: var(--work); }
+  body.phase-rest    { --accent: var(--rest); }
+  body.phase-prepare { --accent: var(--prepare); }
+  body.phase-done    { --accent: var(--done); }
+  h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 8px 0 16px; }
+  main { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Settings */
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field { background: var(--panel); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .field label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .stepper { display: flex; align-items: center; gap: 6px; }
+  .stepper button { width: 36px; height: 36px; border-radius: 10px; border: none; background: #2a313b; color: var(--text); font-size: 1.2rem; cursor: pointer; flex-shrink: 0; }
+  .stepper button:active { background: #36404c; }
+  .stepper input { width: 100%; min-width: 0; text-align: center; font-size: 1.3rem; font-weight: 600; background: transparent; border: none; color: var(--text); -moz-appearance: textfield; }
+  .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .unit { font-size: .7rem; color: var(--muted); text-align: center; margin-top: -4px; }
+  .total { text-align: center; color: var(--muted); font-size: .9rem; }
+
+  /* Timer */
+  .timer { display: none; flex-direction: column; align-items: center; gap: 12px; }
+  .running .timer { display: flex; }
+  .running .settings, .running .total { display: none; }
+  .ring { position: relative; width: min(80vw, 320px); aspect-ratio: 1; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 10; }
+  .ring .track { stroke: var(--panel); }
+  .ring .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke .3s; }
+  .ring .inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .phase { font-size: 1.4rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--accent); }
+  .time { font-size: clamp(4rem, 22vw, 6.5rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .setinfo { color: var(--muted); font-size: 1rem; margin-top: 6px; }
+  .flash { animation: flash .25s; }
+  @keyframes flash { from { transform: scale(1.08); } to { transform: scale(1); } }
+
+  /* Controls */
+  .controls { display: flex; gap: 12px; }
+  .controls button { flex: 1; padding: 16px; font-size: 1.05rem; font-weight: 600; border: none; border-radius: 14px; cursor: pointer; }
+  .primary { background: var(--accent); color: #111; }
+  .secondary { background: var(--panel); color: var(--text); }
+  .secondary[hidden] { display: none; }
+  .toggle { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body class="phase-prepare">
+<h1>Workout Timer</h1>
+<main id="app">
+  <section class="settings">
+    <div class="field">
+      <label><span class="dot" style="background:var(--prepare)"></span>Prepare</label>
+      <div class="stepper"><button data-step="prepare" data-d="-5">−</button><input id="prepare" type="number" min="0" value="10"><button data-step="prepare" data-d="5">+</button></div>
+      <div class="unit">seconds</div>
+    </div>
+    <div class="field">
+      <label><span class="dot" style="background:var(--work)"></span>Work</label>
+      <div class="stepper"><button data-step="work" data-d="-5">−</button><input id="work" type="number" min="1" value="30"><button data-step="work" data-d="5">+</button></div>
+      <div class="unit">seconds</div>
+    </div>
+    <div class="field">
+      <label><span class="dot" style="background:var(--rest)"></span>Rest</label>
+      <div class="stepper"><button data-step="rest" data-d="-5">−</button><input id="rest" type="number" min="0" value="15"><button data-step="rest" data-d="5">+</button></div>
+      <div class="unit">seconds</div>
+    </div>
+    <div class="field">
+      <label><span class="dot" style="background:var(--done)"></span>Sets</label>
+      <div class="stepper"><button data-step="sets" data-d="-1">−</button><input id="sets" type="number" min="1" value="4"><button data-step="sets" data-d="1">+</button></div>
+      <div class="unit">work + rest</div>
+    </div>
+  </section>
+  <div class="total" id="total"></div>
+
+  <section class="timer">
+    <div class="ring">
+      <svg viewBox="0 0 220 220">
+        <circle class="track" cx="110" cy="110" r="100"></circle>
+        <circle class="bar" id="bar" cx="110" cy="110" r="100"></circle>
+      </svg>
+      <div class="inner">
+        <div class="phase" id="phase">Prepare</div>
+        <div class="time" id="time">0:00</div>
+        <div class="setinfo" id="setinfo"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="controls">
+    <button class="primary" id="startBtn">Start</button>
+    <button class="secondary" id="resetBtn" hidden>Reset</button>
+  </div>
+  <label class="toggle"><input type="checkbox" id="sound" checked> Sound</label>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const fields = ['prepare', 'work', 'rest', 'sets'];
+  const app = $('app'), bar = $('bar');
+  const CIRC = 2 * Math.PI * 100;
+  bar.style.strokeDasharray = CIRC;
+
+  // ---------- Settings (saved in this browser) ----------
+  try {
+    const saved = JSON.parse(localStorage.getItem('workoutTimer') || '{}');
+    fields.forEach(f => { if (saved[f] != null) $(f).value = saved[f]; });
+    if (saved.sound === false) $('sound').checked = false;
+  } catch (e) {}
+
+  function readSettings() {
+    const v = {};
+    fields.forEach(f => {
+      const min = +$(f).min;
+      let n = Math.max(min, Math.floor(+$(f).value || 0));
+      $(f).value = n; v[f] = n;
+    });
+    return v;
+  }
+  function save() {
+    try { localStorage.setItem('workoutTimer', JSON.stringify({ ...readSettings(), sound: $('sound').checked })); } catch (e) {}
+  }
+  function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function updateTotal() {
+    const v = readSettings();
+    $('total').textContent = 'Total: ' + fmt(v.prepare + v.sets * (v.work + v.rest));
+  }
+
+  document.querySelectorAll('[data-step]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = $(btn.dataset.step);
+      input.value = Math.max(+input.min, (+input.value || 0) + +btn.dataset.d);
+      updateTotal(); save();
+    });
+  });
+  fields.forEach(f => $(f).addEventListener('change', () => { updateTotal(); save(); }));
+  $('sound').addEventListener('change', save);
+  updateTotal();
+
+  // ---------- Sound (Web Audio, no files needed) ----------
+  let ctx;
+  function audio() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function beep(freq = 880, dur = 0.15, vol = 0.6) {
+    if (!$('sound').checked) return;
+    const c = audio(), o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(c.destination);
+    o.start(t); o.stop(t + dur);
+  }
+  const countdownBeep = () => beep(880, 0.15);       // the 3-2-1 "bang"
+  const changeBeep    = () => beep(1320, 0.45);      // longer, higher tone when a phase switches
+  const doneBeep      = () => { beep(1320, .3); setTimeout(() => beep(1760, .6), 350); };
+
+  // ---------- Keep screen awake while running ----------
+  let wakeLock = null;
+  async function lockScreen() { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {} }
+  function unlockScreen() { try { wakeLock?.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => { if (state.running && document.visibilityState === 'visible') lockScreen(); });
+
+  // ---------- Timer engine ----------
+  const state = { phases: [], idx: 0, endAt: 0, remainingMs: 0, running: false, started: false, lastSec: null, timer: null };
+
+  function buildPhases(v) {
+    const p = [];
+    if (v.prepare > 0) p.push({ type: 'prepare', secs: v.prepare });
+    for (let i = 1; i <= v.sets; i++) {
+      p.push({ type: 'work', secs: v.work, set: i });
+      if (v.rest > 0) p.push({ type: 'rest', secs: v.rest, set: i });
+    }
+    return p;
+  }
+
+  function startPhase(i) {
+    state.idx = i;
+    const ph = state.phases[i];
+    state.remainingMs = ph.secs * 1000;
+    state.endAt = performance.now() + state.remainingMs;
+    state.lastSec = null;
+    document.body.className = 'phase-' + ph.type;
+    $('phase').textContent = ph.type;
+    $('setinfo').textContent = ph.set ? `Set ${ph.set} of ${state.sets}` : `${state.sets} sets`;
+    $('time').classList.remove('flash'); void $('time').offsetWidth; $('time').classList.add('flash');
+  }
+
+  function tick() {
+    if (!state.running) return;
+    const left = state.endAt - performance.now();
+    const ph = state.phases[state.idx];
+
+    if (left <= 0) {
+      if (state.idx + 1 < state.phases.length) { changeBeep(); startPhase(state.idx + 1); return render(ph.secs); }
+      return finish();
+    }
+    const sec = Math.ceil(left / 1000);
+    if (sec !== state.lastSec) {
+      state.lastSec = sec;
+      // Alarm in the last 3 seconds of work, rest and prepare: 3, 2, 1
+      if (sec <= 3) countdownBeep();
+    }
+    render(sec, left / (ph.secs * 1000));
+  }
+
+  function render(sec, frac = 1) {
+    $('time').textContent = fmt(sec);
+    bar.style.strokeDashoffset = CIRC * (1 - frac);
+  }
+
+  function finish() {
+    clearInterval(state.timer);
+    state.running = false; state.started = false;
+    doneBeep(); unlockScreen();
+    document.body.className = 'phase-done';
+    $('phase').textContent = 'Done!';
+    $('setinfo').textContent = `${state.sets} sets complete`;
+    render(0, 0);
+    $('startBtn').textContent = 'Again';
+  }
+
+  function start() {
+    audio(); // unlock audio on the user's tap (required on iPhone/Android)
+    if (!state.started) {
+      const v = readSettings(); save();
+      state.sets = v.sets;
+      state.phases = buildPhases(v);
+      state.started = true;
+      app.classList.add('running');
+      $('resetBtn').hidden = false;
+      startPhase(0);
+    } else {
+      state.endAt = performance.now() + state.remainingMs; // resume
+    }
+    state.running = true;
+    $('startBtn').textContent = 'Pause';
+    lockScreen();
+    clearInterval(state.timer);
+    state.timer = setInterval(tick, 100);
+    tick();
+  }
+
+  function pause() {
+    state.running = false;
+    state.remainingMs = state.endAt - performance.now();
+    clearInterval(state.timer);
+    unlockScreen();
+    $('startBtn').textContent = 'Resume';
+  }
+
+  function reset() {
+    clearInterval(state.timer);
+    state.running = false; state.started = false;
+    unlockScreen();
+    app.classList.remove('running');
+    document.body.className = 'phase-prepare';
+    $('resetBtn').hidden = true;
+    $('startBtn').textContent = 'Start';
+  }
+
+  $('startBtn').addEventListener('click', () => {
+    if (state.running) pause();
+    else if (!state.started && $('startBtn').textContent === 'Again') { reset(); start(); }
+    else start();
+  });
+  $('resetBtn').addEventListener('click', reset);
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('startBtn').click(); }
+  });
+})();
+</script>
+</body>
+</html>
